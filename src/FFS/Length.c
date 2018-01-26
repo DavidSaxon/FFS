@@ -43,7 +43,7 @@ union SimdInt64
 //                                   FUNCTIONS
 //------------------------------------------------------------------------------
 
-FFS_size_t ffs_length_naive(const char* s)
+FFS_size_t ffs_length__naive(const char* s)
 {
     for(FFS_size_t i = 0; i < kFFS_npos; ++i)
     {
@@ -56,16 +56,12 @@ FFS_size_t ffs_length_naive(const char* s)
     return kFFS_npos;
 }
 
-FFS_size_t ffs_length(const char* s)
+FFS_size_t ffs_length__word(const char* s)
 {
-    // TODO: can this be assigned early?
-    const FFS_byte_t* byte_ptr;
+    const FFS_byte_t* byte_ptr = s;
 
-    //TODO: store kFFS_word_size - 1 ?
-    // TODO: naive check the first bits until we're word aligned
-    for(byte_ptr = s;
-        ((FFS_size_t) byte_ptr & (kFFS_word_size - 1)) != 0;
-        ++byte_ptr)
+    // naive check the first bits until we're word aligned
+    for(;((FFS_size_t) byte_ptr & (kFFS_word_size - 1)) != 0; ++byte_ptr)
     {
         if(*byte_ptr == 0)
         {
@@ -84,6 +80,76 @@ FFS_size_t ffs_length(const char* s)
         low_magic  = 0x0101010101010101L;
     }
 
+    // TODO: test how many misfires this performs
+
+    for(;;)
+    {
+
+        FFS_word_t word = *word_ptr++;
+
+        if(((word - low_magic) & high_magic) != 0)
+        {
+            const FFS_byte_t* check = (const FFS_byte_t*) (word_ptr - 1);
+
+            if(check[0] == 0)
+            {
+                return check - s;
+            }
+            if(check[1] == 0)
+            {
+                return (check - s) + 1;
+            }
+            if(check[2] == 0)
+            {
+                return (check - s) + 2;
+            }
+            if(check[3] == 0)
+            {
+                return (check - s) + 3;
+            }
+            if(kFFS_word_size > 4)
+            {
+                if(check[4] == 0)
+                {
+                    return (check - s) + 4;
+                }
+                if(check[5] == 0)
+                {
+                    return (check - s) + 5;
+                }
+                if(check[6] == 0)
+                {
+                    return (check - s) + 6;
+                }
+                if(check[7] == 0)
+                {
+                    return (check - s) + 7;
+                }
+            }
+
+            // misfire - continue
+        }
+    }
+
+    __builtin_unreachable();
+}
+
+FFS_size_t ffs_length__simd(const char* s)
+{
+    const FFS_byte_t* byte_ptr = s;
+
+    // naive check the first bits until we're word aligned
+    for(;((FFS_size_t) byte_ptr & (kFFS_word_size - 1)) != 0; ++byte_ptr)
+    {
+        if(*byte_ptr == 0)
+        {
+            return byte_ptr - s;
+        }
+    }
+
+    const FFS_word_t* word_ptr = (FFS_word_t*) byte_ptr;
+
+    // TODO: 32-bit support
     union SimdInt64 simd_high_magic;
     simd_high_magic.integral[0] = 0x8080808080808080L;
     simd_high_magic.integral[1] = 0x8080808080808080L;
@@ -95,8 +161,7 @@ FFS_size_t ffs_length(const char* s)
     // TODO: DOC
     for(;;)
     {
-
-        // TODO: aggregate
+        // TODO: 32-bit support
         union SimdInt64 simd_word;
         simd_word.integral[0] = *word_ptr++;
         simd_word.integral[1] = *word_ptr++;
@@ -105,7 +170,7 @@ FFS_size_t ffs_length(const char* s)
         if(_mm_test_all_zeros(s0, simd_high_magic.simd) == 0)
         {
             // TODO: could narrow this down where to check faster
-            const FFS_byte_t* check = (const FFS_byte_t*) (word_ptr - 2);
+            // const FFS_byte_t* check = (const FFS_byte_t*) (word_ptr - 2);
 
             if(check[0] == 0)
             {
@@ -171,53 +236,11 @@ FFS_size_t ffs_length(const char* s)
             {
                 return (check - s) + 15;
             }
+
+            // misfire - continue
         }
-
-        // FFS_word_t word = *word_ptr++;
-
-        // if(((word - low_magic) & high_magic) != 0)
-        // {
-        //     const FFS_byte_t* check = (const FFS_byte_t*) (word_ptr - 1);
-
-        //     if(check[0] == 0)
-        //     {
-        //         return check - s;
-        //     }
-        //     if(check[1] == 0)
-        //     {
-        //         return (check - s) + 1;
-        //     }
-        //     if(check[2] == 0)
-        //     {
-        //         return (check - s) + 2;
-        //     }
-        //     if(check[3] == 0)
-        //     {
-        //         return (check - s) + 3;
-        //     }
-        //     if(kFFS_word_size > 4)
-        //     {
-        //         if(check[4] == 0)
-        //         {
-        //             return (check - s) + 4;
-        //         }
-        //         if(check[5] == 0)
-        //         {
-        //             return (check - s) + 5;
-        //         }
-        //         if(check[6] == 0)
-        //         {
-        //             return (check - s) + 6;
-        //         }
-        //         if(check[7] == 0)
-        //         {
-        //             return (check - s) + 7;
-        //         }
-        //     }
-
-        //     // misfire - continue
-        // }
     }
 
-    return kFFS_npos;
+    // TODO: does this help or not?
+    __builtin_unreachable();
 }

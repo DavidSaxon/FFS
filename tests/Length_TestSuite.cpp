@@ -20,6 +20,11 @@ public:
 
     //-----------------------------PUBLIC FUNCTIONS-----------------------------
 
+    virtual void setup()
+    {
+        srand(time(0));
+    }
+
     const char* generate_string(std::size_t length)
     {
         char* ret = new char[length + 1];
@@ -36,79 +41,178 @@ public:
 
 };
 
+//------------------------------------------------------------------------------
+//                                   UNIT TESTS
+//------------------------------------------------------------------------------
+
 ARC_TEST_UNIT_FIXTURE(unit, LengthFixture)
 {
-    std::string s = "0123456789";
-    ARC_CHECK_EQUAL(ffs_length_naive(s.c_str()), 10);
-    ARC_CHECK_EQUAL(ffs_length(s.c_str()), 10);
+    static const std::size_t iterations = 100;
+
+    //------------------------------SHORT STRINGS-------------------------------
+
+    // generate short strings
+    std::vector<const char*> short_strs;
+    short_strs.reserve(iterations);
+    for(std::size_t i = 0; i < iterations; ++i)
+    {
+        short_strs.push_back(fixture->generate_string(1 + (rand() % 15)));
+    }
+
+    ARC_TEST_MESSAGE("Testing short strings with FFS naive");
+    for(const char* s : short_strs)
+    {
+        ARC_CHECK_EQUAL(ffs_length__naive(s), strlen(s));
+    }
+
+    ARC_TEST_MESSAGE("Testing short strings with FFS word");
+    for(const char* s : short_strs)
+    {
+        ARC_CHECK_EQUAL(ffs_length__word(s), strlen(s));
+    }
+
+    // TODO: ffs simd
+
+    // clean up the strings
+    for(const char* s : short_strs)
+    {
+        delete[] s;
+    }
+
+    //-------------------------------LONG STRINGS-------------------------------
+
+    // generate long strings
+    std::vector<const char*> long_strs;
+    long_strs.reserve(iterations);
+    for(std::size_t i = 0; i < iterations; ++i)
+    {
+        long_strs.push_back(fixture->generate_string(1024 + (rand() % 16384)));
+    }
+
+    ARC_TEST_MESSAGE("Testing long strings with FFS naive");
+    for(const char* s : long_strs)
+    {
+        ARC_CHECK_EQUAL(ffs_length__naive(s), strlen(s));
+    }
+
+    ARC_TEST_MESSAGE("Testing long strings with FFS word");
+    for(const char* s : long_strs)
+    {
+        ARC_CHECK_EQUAL(ffs_length__word(s), strlen(s));
+    }
+
+    // TODO: ffs simd
+
+    // clean up the strings
+    for(const char* s : long_strs)
+    {
+        delete[] s;
+    }
 }
+
+//------------------------------------------------------------------------------
+//                               PERFORMANCE TESTS
+//------------------------------------------------------------------------------
 
 ARC_TEST_UNIT_FIXTURE(performance, LengthFixture)
 {
-    static const std::size_t iterations = 10000;
+    static const std::size_t iterations = 20;
+    static const std::size_t sub_iterations = 10000;
 
-    std::vector<const char*> strs;
-    strs.reserve(iterations);
+
+    arc::uint64 naive_time = 0;
+    arc::uint64 std_time   = 0;
+    arc::uint64 word_time  = 0;
+    arc::uint64 simd_time  = 0;
+
     for(std::size_t i = 0; i < iterations; ++i)
     {
-        strs.push_back(fixture->generate_string(1024 + (rand() % 1024)));
-    }
-
-    // generate the strings
-    const char* s2048 = fixture->generate_string(2048);
-
-    ARC_CHECK_EQUAL(ffs_length(s2048), 2048);
-
-    ARC_TEST_MESSAGE("Timing FFS length with 2048 characters");
-    {
-        std::vector<FFS_size_t> results(iterations, 0);
-
-        arc::uint64 time_start =
-            arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
-        for(std::size_t i = 0; i < iterations; ++i)
+        // generate the strings
+        std::vector<const char*> strs;
+        strs.reserve(sub_iterations);
+        for(std::size_t j = 0; j < sub_iterations; ++j)
         {
-            results[0] = ffs_length(strs[i]);
+            strs.push_back(fixture->generate_string(1024 + (rand() % 16384)));
         }
-        arc::uint64 time_end =
-            arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
-        arc::uint64 duration = time_end - time_start;
-        std::cout << "FFS time:   " << duration << std::endl;
-    }
 
-    ARC_TEST_MESSAGE("Timing naive length with 2048 characters");
-    {
-        std::vector<FFS_size_t> results(iterations, 0);
-
-        arc::uint64 time_start =
-            arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
-        for(std::size_t i = 0; i < iterations; ++i)
+        //--------------------------------NAIVE---------------------------------
         {
-            results[0] = ffs_length_naive(strs[i]);
+            std::vector<FFS_size_t> results(sub_iterations, 0);
+
+            arc::uint64 time_start =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            for(std::size_t i = 0; i < sub_iterations; ++i)
+            {
+                results[0] = ffs_length__naive(strs[i]);
+            }
+            arc::uint64 time_end =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            arc::uint64 duration = time_end - time_start;
+            naive_time += duration;
         }
-        arc::uint64 time_end =
-            arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
-        arc::uint64 duration = time_end - time_start;
-        std::cout << "naive time: " << duration << std::endl;
-    }
 
-    ARC_TEST_MESSAGE("Timing strlen with 2048 characters");
-    {
-        std::vector<std::size_t> results(iterations, 0);
-
-        arc::uint64 time_start =
-            arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
-        for(std::size_t i = 0; i < iterations; ++i)
+        //--------------------------------GLIBC---------------------------------
         {
-            results[0] = strlen(strs[i]);
+            std::vector<std::size_t> results(sub_iterations, 0);
+
+            arc::uint64 time_start =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            for(std::size_t i = 0; i < sub_iterations; ++i)
+            {
+                results[0] = strlen(strs[i]);
+            }
+            arc::uint64 time_end =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            arc::uint64 duration = time_end - time_start;
+            std_time += duration;
         }
-        arc::uint64 time_end =
-            arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
-        arc::uint64 duration = time_end - time_start;
-        std::cout << "std time:   " << duration << std::endl;
+
+        //-----------------------------SINGLE WORDS-----------------------------
+        {
+            std::vector<FFS_size_t> results(sub_iterations, 0);
+
+            arc::uint64 time_start =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            for(std::size_t i = 0; i < sub_iterations; ++i)
+            {
+                results[0] = ffs_length__word(strs[i]);
+            }
+            arc::uint64 time_end =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            arc::uint64 duration = time_end - time_start;
+            word_time += duration;
+        }
+
+        //------------------------------SIMD WORDS------------------------------
+        {
+            std::vector<FFS_size_t> results(sub_iterations, 0);
+
+            arc::uint64 time_start =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            for(std::size_t i = 0; i < sub_iterations; ++i)
+            {
+                // results[0] = ffs_length__simd(strs[i]);
+                ffs_length__simd(strs[i]);
+            }
+            arc::uint64 time_end =
+                arc::clock::get_current_time(arc::clock::METRIC_NANOSECONDS);
+            arc::uint64 duration = time_end - time_start;
+            simd_time += duration;
+        }
+
+        // clean up the strings
+        for(const char* s : strs)
+        {
+            delete[] s;
+        }
     }
 
-    // clean up the strings
-    delete[] s2048;
+    std::cout << "naive time:    " << naive_time << std::endl;
+    std::cout << "std time:      " << std_time << std::endl;
+    std::cout << "FFS word time: " << word_time << std::endl;
+    std::cout << "FFS simd time: " << simd_time << std::endl;
+
+
 }
 
 } // namespace anonymous

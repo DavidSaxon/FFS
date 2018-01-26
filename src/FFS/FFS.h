@@ -82,16 +82,87 @@ extern const FFS_size_t kFFS_word_size;
 //                                   FUNCTIONS
 //------------------------------------------------------------------------------
 
-/*!
- * \brief TODO:
- */
-FFS_size_t ffs_length_naive(const char* s);
+//---------------------------------L E N G T H----------------------------------
+
+// TODO: doc ffs_length
 
 /*!
  * \brief TODO:
  */
-FFS_size_t ffs_length(const char* s);
+FFS_size_t ffs_length__naive(const char* s);
 
+/*!
+ * \brief TODO:
+ */
+FFS_size_t ffs_length__word(const char* s);
+
+/*!
+ * \brief TODO:
+ */
+FFS_size_t ffs_length__simd(const char* s);
+
+
+#ifdef FFS_USE_GLIBC
+    #define ffs_length strlen
+#elif defined(FFS_USE_NAIVE)
+    #define ffs_length ffs_length__naive
+#elif defined(FFS_USE_WORD)
+    #define ffs_length ffs_length__word
+#else
+    #define ffs_length ffs_length__simd
+#endif
+
+//----------------------------S T A R T S    W I T H----------------------------
+
+// TODO: doc ffs_starts_with
+
+/*!
+ * \brief TODO:
+ */
+FFS_size_t ffs_starts_with__glibc(
+        const char* a,
+        const char* b,
+        FFS_size_t a_length = kFFS_npos,
+        FFS_size_t b_length = kFFS_npos);
+
+/*!
+ * \brief TODO:
+ */
+FFS_size_t ffs_starts_with__naive(
+        const char* a,
+        const char* b,
+        FFS_size_t a_length = kFFS_npos,
+        FFS_size_t b_length = kFFS_npos);
+
+/*!
+ * \brief TODO:
+ */
+FFS_size_t ffs_starts_with__word(
+        const char* a,
+        const char* b,
+        FFS_size_t a_length = kFFS_npos,
+        FFS_size_t b_length = kFFS_npos);
+
+/*!
+ * \brief TODO:
+ */
+FFS_size_t ffs_starts_with__simd(
+        const char* a,
+        const char* b,
+        FFS_size_t a_length = kFFS_npos,
+        FFS_size_t b_length = kFFS_npos);
+
+
+#ifdef FFS_USE_GLIBC
+    // TODO: glibc implementation
+    #define ffs_starts_with ffs_starts_with__glibc
+#elif defined(FFS_USE_NAIVE)
+    #define ffs_starts_with ffs_starts_with__naive
+#elif defined(FFS_USE_WORD)
+    #define ffs_starts_with ffs_starts_with__word
+#else
+    #define ffs_starts_with ffs_starts_with__simd
+#endif
 
 //------------------------------------------------------------------------------
 #ifdef __cplusplus
